@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "EgoFocus",
+    "slug": "egofocus",
+    "version": "0.1.0",
+    "platforms": ["ios", "web"],
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#080e0d",
+    "plugins": ["expo-sqlite", "expo-dev-client"],
+    "scheme": "egofocus",
+    "ios": {
+      "bundleIdentifier": "com.pavelkom12.egofocus",
+      "supportsTablet": false,
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Подключение к серверу разработки EgoFocus в вашей локальной сети.",
+        "CFBundleDevelopmentRegion": "ru"
+      }
+    }
+  }
+}
