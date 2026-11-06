@@ -8,233 +8,277 @@ import {
   type Metric,
   type Mode,
   type Transition,
+  type SyncBase,
   commitHistory,
   parseBirthday,
   switchMode,
   validateTimeline,
 } from './domain';
+import { api, ApiError, type AuthResult, snapshot } from './api';
+import { mergeHistory, mergeValue, MergeConflict, type Choice } from './merge';
 import * as storage from './storage';
-import { demoTransitions } from './demo';
 
-const normalized = (name: string) => name.trim().toLocaleLowerCase('ru-RU');
-function validateUsername(name: string) {
-  if (!/^[a-zа-яё0-9_.]{3,24}$/i.test(name))
-    throw new Error('Имя: 3–24 буквы, цифры, точки или подчёркивания.');
+export function current(db: Database) {
+  return db.accounts.find((a) => a.id === db.session && a.base);
 }
-async function passwordHash(
-  password: string,
-  salt: string,
-  iterations: number,
-) {
-  return bytesToHex(
-    await pbkdf2Async(sha256, password, salt, {
-      c: iterations,
-      dkLen: 32,
-      asyncTick: 8,
-    }),
-  );
-}
-async function credential(password: string) {
-  if (password.length < 8 || password.length > 128)
-    throw new Error('Пароль должен содержать от 8 до 128 символов.');
-  const salt = bytesToHex(await Crypto.getRandomBytesAsync(32));
-  const iterations = 600000;
-  return {
-    salt,
-    iterations,
-    hash: await passwordHash(password, salt, iterations),
-  };
-}
-function equal(a: string, b: string) {
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-export function current(db: Database): Account | undefined {
-  return db.accounts.find((a) => a.id === db.session);
-}
-function requireAccount(db: Database, id: string) {
-  if (db.session !== id) throw new Error('Сеанс завершён. Войдите снова.');
-  const account = db.accounts.find((a) => a.id === id);
-  if (!account) throw new Error('Профиль не найден.');
-  return account;
-}
-function replace(db: Database, account: Account): Database {
-  validateTimeline(account);
+const normalized = (s: string) => s.trim().toLocaleLowerCase('ru-RU');
+function put(db: Database, a: Account): Database {
+  validateTimeline(a);
   return {
     ...db,
-    accounts: db.accounts.map((a) => (a.id === account.id ? account : a)),
+    accounts: [...db.accounts.filter((old) => old.id !== a.id), a],
   };
 }
+function signed(db: Database, id: string) {
+  const a = current(db);
+  if (!a || a.id !== id || !db.token) throw Error('Войдите снова.');
+  return a;
+}
+function sameHistory(a: Transition[], b: Transition[]) {
+  return (
+    a.length === b.length &&
+    a.every((e, i) => e.at === b[i].at && e.mode === b[i].mode)
+  );
+}
+const fields = ['username', 'email', 'metric'] as const;
+function fromServer(remote: Awaited<ReturnType<typeof snapshot>>): Account {
+  const { profile: p, transitions } = remote;
+  const base: SyncBase = {
+    username: p.username,
+    email: p.email,
+    metric: p.metric,
+    revision: p.revision,
+    transitions,
+  };
+  return {
+    ...p,
+    birthday: p.birthday.split('-').reverse().join('.'),
+    transitions,
+    base,
+    updatedAt: Date.now(),
+  };
+}
+async function authorized(result: AuthResult, password: string) {
+  const server = fromServer(await snapshot(result.token));
+  if (server.id !== result.profile.id)
+    throw Error('Профиль сервера изменился.');
+  const local = await storage.read();
+  const legacy = local.accounts.find(
+    (a) =>
+      !a.base &&
+      !a.importedTo &&
+      a.credential &&
+      a.username === server.username &&
+      a.bornAt === server.bornAt,
+  );
+  let importId: string | undefined;
+  if (legacy?.credential) {
+    const c = legacy.credential;
+    const hash = bytesToHex(
+      await pbkdf2Async(sha256, password, c.salt, {
+        c: c.iterations,
+        dkLen: 32,
+        asyncTick: 8,
+      }),
+    );
+    if (hash === c.hash) importId = legacy.id;
+  }
+  await storage.mutate((db) => {
+    let account =
+      db.accounts.find((a) => a.id === server.id && a.base) || server;
+    const old = db.accounts.find((a) => a.id === importId && !a.importedTo);
+    if (old && account === server) {
+      const initial = {
+        ...server.transitions[0],
+        at: server.bornAt,
+        mode: 'unknown' as const,
+      };
+      account = {
+        ...server,
+        transitions: old.transitions,
+        email: old.email || server.email,
+        metric: old.metric === 'percentage' ? server.metric : old.metric,
+        base: {
+          ...server.base!,
+          email: '',
+          metric: 'percentage',
+          transitions: [initial],
+        },
+      };
+      db = {
+        ...db,
+        accounts: db.accounts.map((a) =>
+          a.id === old.id ? { ...a, importedTo: server.id } : a,
+        ),
+      };
+    }
+    return { ...put(db, account), session: server.id, token: result.token };
+  });
+  return sync();
+}
+let pending: Promise<unknown> = Promise.resolve();
+function sync(choice?: Choice): Promise<Database> {
+  const job = pending.then(() => syncOnce(choice));
+  pending = job.catch(() => {});
+  return job;
+}
+async function syncOnce(choice?: Choice): Promise<Database> {
+  const db = await storage.read(),
+    local = current(db);
+  if (!local || !local.base || !db.token) return db;
+  const base = local.base,
+    token = db.token;
+  try {
+    const server = fromServer(await snapshot(token));
+    if (server.id !== local.id) throw Error('Несовпадение профилей.');
+    const merged = {
+      username: mergeValue(
+        base.username,
+        local.username,
+        server.username,
+        choice,
+      ),
+      email: mergeValue(base.email, local.email, server.email, choice),
+      metric: mergeValue(base.metric, local.metric, server.metric, choice),
+    };
+    const transitions = mergeHistory(
+      base.transitions,
+      local.transitions,
+      server.transitions,
+      choice,
+    );
+    validateTimeline({ ...local, transitions });
+    let revision = server.revision;
+    if (fields.some((k) => merged[k] !== server[k])) {
+      revision = (
+        await api<{ revision: number }>('/profile', token, 'PATCH', {
+          ...merged,
+          revision,
+        })
+      ).revision;
+    }
+    if (!sameHistory(transitions, server.transitions)) {
+      revision = (
+        await api<{ revision: number }>('/timeline', token, 'PUT', {
+          transitions,
+          revision,
+        })
+      ).revision;
+    }
+    return await storage.mutate((latest) => {
+      if (latest.token !== token || latest.session !== local.id) return latest;
+      const a = signed(latest, local.id);
+      if (a.revision !== local.revision) return latest; // another tab saved after we read its draft
+      const modified =
+        fields.some((k) => a[k] !== merged[k]) ||
+        !sameHistory(a.transitions, transitions);
+      return put(latest, {
+        ...a,
+        ...merged,
+        transitions,
+        revision: a.revision + (modified ? 1 : 0),
+        base: { ...merged, transitions, revision },
+      });
+    });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      return storage.mutate((latest) =>
+        latest.token === token
+          ? { ...latest, token: undefined, session: null }
+          : latest,
+      );
+    }
+    const latest = await storage.read();
+    if (latest.token !== token) return latest;
+    return {
+      ...latest,
+      syncNotice:
+        e instanceof Error ? e.message : 'Синхронизация временно недоступна.',
+      conflict: e instanceof MergeConflict,
+    };
+  }
+}
+async function change(id: string, update: (a: Account) => Account) {
+  await storage.mutate((db) => put(db, update(signed(db, id))));
+  return sync();
+}
 export const repository = {
-  saveHistory(
+  async load() {
+    const db = await storage.read();
+    if (db.schemaVersion !== 1)
+      throw Error('Обновите приложение для этой версии данных.');
+    return db;
+  },
+  sync,
+  login: async (username: string, password: string) =>
+    authorized(
+      await api<AuthResult>('/auth/login', undefined, 'POST', {
+        username: normalized(username),
+        password,
+      }),
+      password,
+    ),
+  register: async (username: string, password: string, birthday: string) => {
+    const bornAt = parseBirthday(birthday);
+    return authorized(
+      await api<AuthResult>('/auth/register', undefined, 'POST', {
+        username: normalized(username),
+        password,
+        birthday: birthday.trim().split('.').reverse().join('-'),
+        utcOffsetMinutes: -new Date(bornAt).getTimezoneOffset(),
+      }),
+      password,
+    );
+  },
+  async logout() {
+    const db = await storage.read();
+    if (db.token) {
+      try {
+        await api('/auth/logout', db.token, 'POST');
+      } catch (e) {
+        if (!(e instanceof ApiError && [0, 401].includes(e.status))) throw e;
+      }
+    }
+    return storage.mutate((latest) =>
+      latest.token === db.token
+        ? { ...latest, session: null, token: undefined }
+        : latest,
+    );
+  },
+  switch: (id: string, target: Mode) =>
+    change(id, (a) => switchMode(a, target, Date.now(), Crypto.randomUUID())),
+  saveHistory: (
     id: string,
     revision: number,
     events: Transition[],
     limit: number,
-  ) {
-    return storage.mutate((db) =>
-      replace(
-        db,
-        commitHistory(
-          requireAccount(db, id),
-          revision,
-          events,
-          limit,
-          Date.now(),
-        ),
-      ),
-    );
-  },
-  async createDemo() {
-    const secret = await credential('demo12345');
-    return storage.mutate((db) => {
-      let username = 'demo';
-      let suffix = 2;
-      while (db.accounts.some((a) => a.username === username))
-        username = 'demo' + suffix++;
-      const now = Date.now();
-      const bornAt = parseBirthday('15.05.1998', now);
-      const account: Account = {
-        id: Crypto.randomUUID(),
-        username,
-        email: '',
-        birthday: '15.05.1998',
-        bornAt,
-        credential: secret,
-        metric: 'percentage',
-        revision: 1,
-        updatedAt: now,
-        transitions: demoTransitions(bornAt, now, () => Crypto.randomUUID()),
-      };
-      validateTimeline(account);
-      return {
-        ...db,
-        accounts: [...db.accounts, account],
-        session: account.id,
-      };
-    });
-  },
-  async load() {
-    const db = await storage.read();
-    if (db.schemaVersion !== 1)
-      throw new Error('Версия данных не поддерживается. Обновите приложение.');
-    db.accounts.forEach(validateTimeline);
-    return db;
-  },
-  async register(username: string, password: string, birthday: string) {
-    username = normalized(username);
-    validateUsername(username);
-    const bornAt = parseBirthday(birthday);
-    const secret = await credential(password);
-    const id = Crypto.randomUUID();
-    return storage.mutate((db) => {
-      if (db.accounts.some((a) => a.username === username))
-        throw new Error('Это имя пользователя уже занято на этом устройстве.');
-      const account: Account = {
-        id,
-        username,
-        birthday: birthday.trim(),
-        bornAt,
-        email: '',
-        credential: secret,
-        transitions: [{ id: Crypto.randomUUID(), at: bornAt, mode: 'unknown' }],
-        metric: 'percentage',
-        revision: 1,
-        updatedAt: Date.now(),
-      };
-      return { ...db, accounts: [...db.accounts, account], session: id };
-    });
-  },
-  async login(username: string, password: string) {
-    const db = await storage.read();
-    const account = db.accounts.find(
-      (a) => a.username === normalized(username),
-    );
-    if (
-      !account ||
-      !equal(
-        await passwordHash(
-          password,
-          account.credential.salt,
-          account.credential.iterations,
-        ),
-        account.credential.hash,
-      )
-    )
-      throw new Error('Неверное имя пользователя или пароль.');
-    return storage.mutate((latest) => {
-      const found = latest.accounts.find(
-        (a) =>
-          a.id === account.id && a.credential.hash === account.credential.hash,
-      );
-      if (!found) throw new Error('Данные входа изменились. Повторите вход.');
-      return { ...latest, session: found.id };
-    });
-  },
-  logout: () => storage.mutate((db) => ({ ...db, session: null })),
-  switch(id: string, target: Mode) {
-    return storage.mutate((db) =>
-      replace(
-        db,
-        switchMode(
-          requireAccount(db, id),
-          target,
-          Date.now(),
-          Crypto.randomUUID(),
-        ),
-      ),
-    );
-  },
+  ) => change(id, (a) => commitHistory(a, revision, events, limit, Date.now())),
   async profile(id: string, username: string, email: string, metric: Metric) {
     username = normalized(username);
     email = email.trim();
-    validateUsername(username);
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      throw new Error('Проверьте адрес электронной почты.');
-    return storage.mutate((db) => {
-      const a = requireAccount(db, id);
-      if (
-        db.accounts.some(
-          (other) => other.id !== id && other.username === username,
-        )
-      )
-        throw new Error('Это имя уже занято.');
-      return replace(db, {
-        ...a,
-        username,
-        email,
-        metric,
-        revision: a.revision + 1,
-        updatedAt: Date.now(),
-      });
-    });
-  },
-  async password(id: string, oldPassword: string, newPassword: string) {
-    const db = await storage.read();
-    const a = requireAccount(db, id);
+    if (!/^[a-zа-яё0-9_.]{3,24}$/i.test(username))
+      throw Error('Проверьте имя пользователя.');
     if (
-      !equal(
-        await passwordHash(
-          oldPassword,
-          a.credential.salt,
-          a.credential.iterations,
-        ),
-        a.credential.hash,
-      )
+      email.length > 254 ||
+      (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     )
-      throw new Error('Текущий пароль неверен.');
-    const secret = await credential(newPassword);
-    return storage.mutate((latest) => {
-      const latestAccount = requireAccount(latest, id);
-      if (latestAccount.credential.hash !== a.credential.hash)
-        throw new Error('Пароль уже изменился. Повторите действие.');
-      return replace(latest, {
-        ...latestAccount,
-        credential: secret,
-        revision: latestAccount.revision + 1,
-        updatedAt: Date.now(),
-      });
+      throw Error('Проверьте электронную почту.');
+    return change(id, (a) => ({
+      ...a,
+      username,
+      email,
+      metric,
+      revision: a.revision + 1,
+      updatedAt: Date.now(),
+    }));
+  },
+  async password(id: string, currentPassword: string, newPassword: string) {
+    const db = await storage.read();
+    signed(db, id);
+    await api('/auth/password', db.token, 'POST', {
+      currentPassword,
+      newPassword,
     });
+    return db;
   },
 };

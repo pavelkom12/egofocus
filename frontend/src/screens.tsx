@@ -44,18 +44,6 @@ export function Auth({ onChange }: { onChange: (db: Database) => void }) {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  async function openDemo() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      onChange(await repository.createDemo());
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
   async function submit() {
     if (busy) return;
     setError('');
@@ -162,23 +150,10 @@ export function Auth({ onChange }: { onChange: (db: Database) => void }) {
           </Text>
         </Pressable>
       </View>
-      <View style={{ marginTop: 20, gap: 10 }}>
-        <Button
-          title="Попробовать с демоданными"
-          secondary
-          disabled={busy}
-          onPress={() => void openDemo()}
-        />
-        <Text style={[S.subtitle, { fontSize: 12 }]}>
-          Отдельный профиль с историей за 28 дней. Пароль: demo12345. Ваши
-          данные сохранятся.
-        </Text>
-      </View>
       <View style={[L.localNote, { marginTop: 30 }]}>
         <View style={L.dot} />
         <Text style={[S.subtitle, { fontSize: 12, flex: 1 }]}>
-          Пока профиль и история хранятся только на этом устройстве. Локальный
-          вход работает без интернета.
+          Для входа нужен интернет. После входа можно вести историю офлайн.
         </Text>
       </View>
     </ScrollView>
@@ -674,8 +649,8 @@ export function Profile({
       <View style={[L.localNote, { marginVertical: 24 }]}>
         <View style={L.dot} />
         <Text style={[S.subtitle, { flex: 1, fontSize: 12 }]}>
-          Данные на этом устройстве. Синхронизация с сервером появится позже.
-          Очистка данных приложения или сайта удалит локальную историю.
+          История сохраняется на этом устройстве и синхронизируется с сервером
+          при подключении.
         </Text>
       </View>
       <Button
@@ -685,23 +660,6 @@ export function Profile({
         disabled={busy}
         onPress={() => void run(repository.logout)}
       />
-      <View style={[S.card, { marginTop: 22, gap: 14 }]}>
-        <Text style={S.section}>Данные для проверки</Text>
-        <Text style={S.subtitle}>
-          Отдельный профиль с историей за 28 дней. Ваши текущие данные
-          сохранятся.
-        </Text>
-        <Button
-          title="Создать демопрофиль"
-          secondary
-          disabled={busy}
-          onPress={() => void run(repository.createDemo)}
-        />
-        <Text style={[S.subtitle, { fontSize: 12 }]}>
-          Имя нового профиля появится сверху. Пароль: demo12345. Каждое нажатие
-          создаёт новый профиль.
-        </Text>
-      </View>
       {busy && <ActivityIndicator color={C.green} style={{ marginTop: 14 }} />}
     </ScrollView>
   );

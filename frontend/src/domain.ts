@@ -1,13 +1,22 @@
 export type Mode = 'unknown' | 'focus' | 'rest';
 export type Metric = 'percentage' | 'focus' | 'rest';
 export type Transition = { id: string; at: number; mode: Mode };
+export type SyncBase = {
+  revision: number;
+  username: string;
+  email: string;
+  metric: Metric;
+  transitions: Transition[];
+};
 export type Account = {
   id: string;
   username: string;
   email: string;
   birthday: string;
   bornAt: number;
-  credential: { salt: string; hash: string; iterations: number };
+  importedTo?: string;
+  base?: SyncBase;
+  credential?: { salt: string; hash: string; iterations: number };
   metric: Metric;
   transitions: Transition[];
   revision: number;
@@ -17,6 +26,9 @@ export type Database = {
   schemaVersion: 1;
   accounts: Account[];
   session: string | null;
+  token?: string;
+  syncNotice?: string;
+  conflict?: boolean;
 };
 export type Interval = Transition & { end: number };
 export const emptyDatabase = (): Database => ({

@@ -21,6 +21,7 @@ jobs:
         working-directory: frontend
     env:
       CI: '1'
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
       EXPO_NO_TELEMETRY: '1'
       CONFIGURATION: ${{ inputs.configuration }}
     steps:

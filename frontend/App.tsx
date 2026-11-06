@@ -25,18 +25,31 @@ function Root() {
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const generation = useRef(0);
+  const refreshing = useRef(false);
   const insets = useSafeAreaInsets();
   const refresh = useCallback(async () => {
-    if (lock.current) return;
+    if (lock.current || refreshing.current) return;
+    refreshing.current = true;
+    const version = generation.current;
+    const accept = (value: Database) => {
+      if (version === generation.current && !lock.current) setDb(value);
+    };
     try {
-      setDb(await repository.load());
-      setError('');
+      accept(await repository.load());
+      accept(await repository.sync());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось открыть данные.');
+      if (version === generation.current)
+        setError(e instanceof Error ? e.message : 'Не удалось открыть данные.');
+    } finally {
+      refreshing.current = false;
     }
   }, []);
   useEffect(() => {
     const initial = setTimeout(() => void refresh(), 0);
+    const retry = setInterval(() => void refresh(), 30000);
+    const online = () => void refresh();
+    if (Platform.OS === 'web') window.addEventListener('online', online);
     const interval = setInterval(() => setNow(Date.now()), 1000);
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -55,6 +68,8 @@ function Root() {
     return () => {
       clearTimeout(initial);
       clearInterval(interval);
+      clearInterval(retry);
+      if (Platform.OS === 'web') window.removeEventListener('online', online);
       sub.remove();
       if (Platform.OS === 'web')
         document.removeEventListener('visibilitychange', onVisible);
@@ -62,6 +77,7 @@ function Root() {
   }, [refresh]);
   async function run(operation: () => Promise<Database>) {
     if (lock.current) return false;
+    generation.current++;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -105,6 +121,7 @@ function Root() {
       ) : !account ? (
         <Auth
           onChange={(value) => {
+            generation.current++;
             setDb(value);
             setTab('home');
             setError('');
@@ -112,6 +129,29 @@ function Root() {
         />
       ) : (
         <>
+          {!!db.syncNotice && (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 6 }}>
+              <Notice message={db.syncNotice} />
+              {db.conflict && (
+                <>
+                  <Text style={S.subtitle}>
+                    Какую версию использовать для спорных участков?
+                  </Text>
+                  <Button
+                    disabled={busy}
+                    title="С этого устройства"
+                    onPress={() => void run(() => repository.sync('local'))}
+                  />
+                  <Button
+                    disabled={busy}
+                    secondary
+                    title="С сервера"
+                    onPress={() => void run(() => repository.sync('server'))}
+                  />
+                </>
+              )}
+            </View>
+          )}
           {!!error && (
             <View
               style={{
