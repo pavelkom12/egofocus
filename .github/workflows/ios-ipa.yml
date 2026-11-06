@@ -16,6 +16,9 @@ jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: frontend
     env:
       CI: '1'
       EXPO_NO_TELEMETRY: '1'
@@ -26,6 +29,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Select Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode_26.4.app/Contents/Developer
@@ -78,13 +82,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: EgoFocus-${{ inputs.configuration }}-unsigned
-          path: build/*.ipa
+          path: frontend/build/*.ipa
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: iphone-build-logs
-          path: build/*.log
+          path: frontend/build/*.log
           if-no-files-found: ignore
           retention-days: 7

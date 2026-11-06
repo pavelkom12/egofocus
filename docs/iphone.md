@@ -37,7 +37,7 @@ Apple ID и сертификаты в GitHub не нужны. Неподписа
 На Windows:
 
 ```powershell
-Set-Location 'F:\Development\EgoFocus'
+Set-Location 'F:\Development\EgoFocus\frontend'
 npm.cmd start -- --lan
 ```
 
