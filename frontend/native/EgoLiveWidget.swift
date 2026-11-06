@@ -11,7 +11,7 @@ private func title(_ mode: String) -> String {
 private func symbol(_ mode: String) -> String {
   mode == "focus" ? "flame.fill" : mode == "rest" ? "cloud.fill" : "minus.circle.fill"
 }
-private func tint(_ mode: String) -> Color {
+private func stateColor(_ mode: String) -> Color {
   mode == "focus" ? emerald : mode == "rest" ? lavender : Color(red: 0.68, green: 0.75, blue: 0.72)
 }
 
@@ -72,7 +72,7 @@ struct ActivityControls: View {
     Button(intent: ChangeEgoMode(accountID: accountID, mode: next)) {
       Image(systemName: symbol(next))
         .font(.system(size: 20, weight: .medium))
-        .foregroundStyle(tint(next))
+        .foregroundStyle(stateColor(next))
         .frame(width: 46, height: 46)
         .background(.white.opacity(0.08), in: Circle())
         .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1))
@@ -96,7 +96,7 @@ struct EgoLiveWidget: Widget {
       HStack(spacing: 16) {
         VStack(alignment: .leading, spacing: 7) {
           Label(title(context.state.mode), systemImage: symbol(context.state.mode))
-            .font(.system(size: 12, weight: .medium)).foregroundStyle(tint(context.state.mode))
+            .font(.system(size: 12, weight: .medium)).foregroundStyle(stateColor(context.state.mode))
           ActivityTimer(state: context.state).font(.system(size: 38, weight: .light, design: .rounded))
         }
         Spacer(minLength: 0)
@@ -111,7 +111,7 @@ struct EgoLiveWidget: Widget {
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           Label(title(context.state.mode), systemImage: symbol(context.state.mode))
-            .font(.caption).foregroundStyle(tint(context.state.mode))
+            .font(.caption).foregroundStyle(stateColor(context.state.mode))
         }
         DynamicIslandExpandedRegion(.bottom) {
           HStack {
@@ -121,14 +121,14 @@ struct EgoLiveWidget: Widget {
           }.padding(.vertical, 6)
         }
       } compactLeading: {
-        Image(systemName: symbol(context.state.mode)).foregroundStyle(tint(context.state.mode))
+        Image(systemName: symbol(context.state.mode)).foregroundStyle(stateColor(context.state.mode))
       } compactTrailing: {
         ActivityTimer(state: context.state).font(.caption2).frame(maxWidth: 70)
       } minimal: {
-        Image(systemName: symbol(context.state.mode)).foregroundStyle(tint(context.state.mode))
+        Image(systemName: symbol(context.state.mode)).foregroundStyle(stateColor(context.state.mode))
       }
       .widgetURL(URL(string: "egofocus://"))
-      .keylineTint(tint(context.state.mode))
+      .keylineTint(stateColor(context.state.mode))
     }
   }
 }
