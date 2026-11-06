@@ -1,4 +1,4 @@
-import React, { type PropsWithChildren } from 'react';
+import React, { useState, type PropsWithChildren } from 'react';
 import {
   Platform,
   Pressable,
@@ -31,7 +31,9 @@ export type IconName =
   | 'check'
   | 'chevron'
   | 'edit'
-  | 'trash';
+  | 'trash'
+  | 'eye'
+  | 'eyeOff';
 export function Icon({
   name,
   color = C.muted,
@@ -42,6 +44,9 @@ export function Icon({
   size?: number;
 }) {
   const paths: Record<IconName, string> = {
+    eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    eyeOff:
+      'm3 3 18 18M10.6 5.1A13 13 0 0 1 12 5c6.5 0 10 7 10 7a19 19 0 0 1-3.1 3.9M6.1 6.1A23 23 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.9-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2',
     focus:
       'M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3',
     stats: 'M5 20v-6m7 6V4m7 16V9',
@@ -144,17 +149,56 @@ export function Button({
     </Pressable>
   );
 }
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({
+  label,
+  secureTextEntry,
+  style,
+  ...props
+}: TextInputProps & { label: string }) {
+  const [visible, setVisible] = useState(false);
   return (
     <View style={{ gap: 8 }}>
       <Text style={S.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        placeholderTextColor="#61756b"
-        selectionColor={C.green}
-        style={S.input}
-        {...props}
-      />
+      <View>
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor="#61756b"
+          selectionColor={C.green}
+          autoCapitalize={secureTextEntry ? 'none' : undefined}
+          autoCorrect={secureTextEntry ? false : undefined}
+          {...props}
+          secureTextEntry={!!secureTextEntry && !visible}
+          style={[S.input, style, secureTextEntry && { paddingRight: 60 }]}
+        />
+        {!!secureTextEntry && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              (visible ? 'Скрыть пароль: ' : 'Показать пароль: ') + label
+            }
+            accessibilityState={{ disabled: props.editable === false }}
+            disabled={props.editable === false}
+            onPress={() => setVisible((value) => !value)}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              right: 4,
+              top: 0,
+              bottom: 0,
+              width: 48,
+              minHeight: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed || props.editable === false ? 0.5 : 1,
+            })}
+          >
+            <Icon
+              name={visible ? 'eyeOff' : 'eye'}
+              color={visible ? C.green : C.muted}
+              size={21}
+            />
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }

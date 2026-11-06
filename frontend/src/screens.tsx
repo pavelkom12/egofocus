@@ -68,7 +68,7 @@ export function Auth({ onChange }: { onChange: (db: Database) => void }) {
       contentContainerStyle={[S.content, { paddingTop: 58, paddingBottom: 48 }]}
     >
       <View style={L.brand}>
-        <Icon name="focus" color={C.green} size={25} />
+        <BrandLogo size={32} />
         <Text style={S.eyebrow}>EGO FOCUS</Text>
       </View>
       <Text style={[S.title, { fontSize: 40, marginTop: 38, lineHeight: 46 }]}>
@@ -94,15 +94,24 @@ export function Auth({ onChange }: { onChange: (db: Database) => void }) {
         {register && (
           <Field
             label="Дата рождения"
-            placeholder="ДД.ММ.ГГГГ"
+            placeholder="--.--.----"
             value={birthday}
-            onChangeText={setBirthday}
-            keyboardType="numbers-and-punctuation"
+            onChangeText={(text) => {
+              const digits = text.replace(/\D/g, '').slice(0, 8);
+              setBirthday(
+                [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)]
+                  .filter(Boolean)
+                  .join('.'),
+              );
+            }}
+            inputMode="numeric"
+            keyboardType="number-pad"
             maxLength={10}
             editable={!busy}
           />
         )}
         <Field
+          key={register ? 'register-password' : 'login-password'}
           label="Пароль"
           placeholder={register ? 'Не менее 8 символов' : 'Введите пароль'}
           value={password}
@@ -149,12 +158,6 @@ export function Auth({ onChange }: { onChange: (db: Database) => void }) {
               : 'Нет профиля? Зарегистрироваться'}
           </Text>
         </Pressable>
-      </View>
-      <View style={[L.localNote, { marginTop: 30 }]}>
-        <View style={L.dot} />
-        <Text style={[S.subtitle, { fontSize: 12, flex: 1 }]}>
-          Для входа нужен интернет. После входа можно вести историю офлайн.
-        </Text>
       </View>
     </ScrollView>
   );
@@ -349,7 +352,7 @@ export function Home({
               },
             ]}
           >
-            <Icon name="focus" color={C.muted} size={28} />
+            <BrandLogo size={32} />
             <Text style={{ color: C.text, fontSize: 16 }}>
               Всё начинается с момента
             </Text>

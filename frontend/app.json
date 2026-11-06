@@ -21,6 +21,9 @@
         "CFBundleDevelopmentRegion": "ru"
       }
     },
-    "icon": "./assets/brand/app-icon.png"
+    "icon": "./assets/brand/app-icon.png",
+    "web": {
+      "favicon": "./assets/brand/app-icon.png"
+    }
   }
 }
