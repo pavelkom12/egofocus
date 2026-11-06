@@ -1,0 +1,6 @@
+EGOFOCUS_APP_DIR=/opt/egofocus
+EGOFOCUS_REPOSITORY=git@github.com:pavelkom12/egofocus.git
+EGOFOCUS_BRANCH=main
+EGOFOCUS_DEPLOY_KEY=/root/.ssh/egofocus_github_deploy
+EGOFOCUS_ENV_FILE=/etc/egofocus/production.env
+EGOFOCUS_PUBLIC_URL=https://focus.egovivo.online/api/health

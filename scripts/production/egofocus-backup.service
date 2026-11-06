@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up EgoFocus database
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/egofocus backup

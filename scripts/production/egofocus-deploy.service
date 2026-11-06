@@ -1,0 +1,7 @@
+[Unit]
+Description=Deploy EgoFocus independently
+After=network-online.target docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/egofocus deploy

@@ -9,7 +9,11 @@
     "typecheck": "npm --prefix frontend run typecheck --",
     "build:web": "npm --prefix frontend run build:web --",
     "doctor": "npm --prefix frontend run doctor --",
-    "deps:check": "npm --prefix frontend run deps:check --"
+    "deps:check": "npm --prefix frontend run deps:check --",
+    "backup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/production/ManageProduction.ps1 -Action Backup",
+    "production:logs": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/production/ManageProduction.ps1 -Action Logs",
+    "deploy": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/production/ManageProduction.ps1 -Action Deploy",
+    "production:status": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/production/ManageProduction.ps1 -Action Status"
   },
   "main": "./index.ts"
 }

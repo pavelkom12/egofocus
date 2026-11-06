@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up EgoFocus daily
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=egofocus-backup.service
+[Install]
+WantedBy=timers.target
