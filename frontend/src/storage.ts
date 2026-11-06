@@ -2,7 +2,7 @@ import { openDatabaseAsync } from 'expo-sqlite';
 import { type Database, emptyDatabase } from './domain';
 const connection = openDatabaseAsync('egofocus.db').then(async (db) => {
   await db.execAsync(
-    'PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS local_state (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)',
+    'PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS local_state (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)',
   );
   return db;
 });
@@ -19,6 +19,10 @@ export function mutate(update: (db: Database) => Database): Promise<Database> {
     const db = await connection;
     let result!: Database;
     await db.withExclusiveTransactionAsync(async (tx) => {
+      // Acquire the write lock before reading; LiveActivityIntent can write concurrently.
+      await tx.execAsync(
+        'PRAGMA busy_timeout = 5000; UPDATE local_state SET id=id WHERE id=1',
+      );
       const row = await tx.getFirstAsync<{ value: string }>(
         'SELECT value FROM local_state WHERE id=1',
       );

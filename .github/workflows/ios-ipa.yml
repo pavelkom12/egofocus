@@ -42,6 +42,11 @@ jobs:
           npm run lint
           npm test
           npm run deps:check
+      - name: Check native history mutations
+        run: |
+          mkdir -p build
+          swiftc modules/ego-live-activity/ios/EgoHistory.swift tests/LiveActivityHistoryTests.swift -o build/check-live-history
+          build/check-live-history
       - name: Generate iOS project
         run: npx expo prebuild --platform ios --no-install
       - name: Install CocoaPods
@@ -77,7 +82,8 @@ jobs:
           target = pathlib.Path("build/package/Payload/EgoFocus.app")
           extensions = sorted(str(p.relative_to(source)) for p in source.rglob("*.appex"))
           assert extensions == sorted(str(p.relative_to(target)) for p in target.rglob("*.appex"))
-          print("Preserved extensions:", extensions or "none configured in this version")
+          assert "PlugIns/EgoLiveActivity.appex" in extensions, "Live Activity extension is missing"
+          print("Preserved extensions:", extensions)
           PY
           (cd build/package && /usr/bin/zip -qry "../EgoFocus-$CONFIGURATION-unsigned.ipa" Payload)
       - uses: actions/upload-artifact@v4

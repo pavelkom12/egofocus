@@ -14,6 +14,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { type Database } from './src/domain';
+import { observeLiveActivity, refreshLiveActivity } from './src/liveActivity';
 import { current, repository } from './src/repository';
 import { Auth, Home, Profile, Statistics } from './src/screens';
 import { Button, C, Glass, Icon, type IconName, Notice, S } from './src/ui';
@@ -95,6 +96,17 @@ function Root() {
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!db) return;
+    // Read the committed database natively, never push a potentially stale React snapshot.
+    void refreshLiveActivity().catch((e: unknown) => {
+      console.warn('Live Activity:', e);
+    });
+  }, [db]);
+  useEffect(() => {
+    const subscription = observeLiveActivity(() => void refresh());
+    return () => subscription.remove();
+  }, [refresh]);
   const account = db && current(db);
   return (
     <SafeAreaView style={S.page} edges={['top', 'left', 'right']}>

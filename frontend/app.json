@@ -6,7 +6,11 @@
     "platforms": ["ios", "web"],
     "userInterfaceStyle": "dark",
     "backgroundColor": "#080e0d",
-    "plugins": ["expo-sqlite", "expo-dev-client"],
+    "plugins": [
+      "expo-sqlite",
+      "expo-dev-client",
+      "./plugins/withLiveActivity.cjs"
+    ],
     "scheme": "egofocus",
     "ios": {
       "bundleIdentifier": "com.pavelkom12.egofocus",
@@ -16,6 +20,7 @@
         "NSLocalNetworkUsageDescription": "Подключение к серверу разработки EgoFocus в вашей локальной сети.",
         "CFBundleDevelopmentRegion": "ru"
       }
-    }
+    },
+    "icon": "./assets/brand/app-icon.png"
   }
 }
