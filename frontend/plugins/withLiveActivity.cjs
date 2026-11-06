@@ -33,7 +33,7 @@ module.exports = function withLiveActivity(config) {
     fs.writeFileSync(
       path.join(cfg.modRequest.platformProjectRoot, packageFile),
       `import AppIntents
-import EgoLiveActivity
+internal import EgoLiveActivity
 struct EgoAppIntents: AppIntentsPackage {
   static var includedPackages: [any AppIntentsPackage.Type] { [EgoIntentsPackage.self] }
 }
