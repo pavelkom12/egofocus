@@ -27,6 +27,8 @@ import {
   rangeStart,
 } from './domain';
 import { repository } from './repository';
+import { TimelineEditor } from './TimelineEditor';
+import { BrandLogo } from './BrandLogo';
 import { TimerBackdrop } from './TimerBackdrop';
 import { BalanceChart, DailyChart } from './StatisticsCharts';
 import { Button, C, Field, Icon, Notice, S } from './ui';
@@ -187,10 +189,12 @@ function HistoryRow({
   item,
   now,
   previous,
+  onEdit,
 }: {
   item: Interval;
   now: number;
   previous?: Interval;
+  onEdit: (item: Interval, remove: boolean) => void;
 }) {
   const date = dayLabel(item.at, now);
   const divider =
@@ -218,19 +222,17 @@ function HistoryRow({
         </View>
         <View style={L.historyActions}>
           <Pressable
-            disabled
+            onPress={() => onEdit(item, false)}
             accessibilityRole="button"
-            accessibilityLabel="Изменить запись — скоро"
-            accessibilityState={{ disabled: true }}
+            accessibilityLabel="Изменить запись"
             style={L.historyAction}
           >
             <Icon name="edit" size={16} color="#71867b" />
           </Pressable>
           <Pressable
-            disabled
+            onPress={() => onEdit(item, true)}
             accessibilityRole="button"
-            accessibilityLabel="Удалить запись — скоро"
-            accessibilityState={{ disabled: true }}
+            accessibilityLabel="Удалить запись"
             style={L.historyAction}
           >
             <Icon name="trash" size={16} color="#71867b" />
@@ -253,122 +255,157 @@ export function Home({
   busy: boolean;
 }) {
   const [count, setCount] = useState(20);
+  const [editing, setEditing] = useState<{
+    item: Interval;
+    remove: boolean;
+  } | null>(null);
   const active = account.transitions[account.transitions.length - 1];
   const all = intervals(account, now).slice(0, -1).reverse();
   const rest = active.mode === 'rest';
   const next: Mode = active.mode === 'focus' ? 'rest' : 'focus';
   return (
-    <FlatList
-      style={{ flex: 1 }}
-      contentContainerStyle={S.content}
-      data={all.slice(0, count)}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item, index }) => (
-        <HistoryRow item={item} now={now} previous={all[index - 1]} />
-      )}
-      onEndReached={() => {
-        if (count < all.length) setCount((c) => c + 20);
-      }}
-      onEndReachedThreshold={0.25}
-      ListHeaderComponent={
-        <>
-          <View style={L.brand}>
-            <Icon name="focus" color={C.green} size={20} />
-            <Text style={S.eyebrow}>EGO FOCUS</Text>
-          </View>
-          <View style={[S.row, { marginTop: 20, marginBottom: 26 }]}>
-            <Text style={S.title}>Сейчас</Text>
-            <Text style={L.dateBadge}>
-              {new Date(now).toLocaleDateString('ru-RU', {
-                day: 'numeric',
-                month: 'long',
-              })}
-            </Text>
-          </View>
-          <View style={L.timerCard}>
-            <TimerBackdrop mode={active.mode} />
-            <View style={S.row}>
-              <View style={L.modeBadge}>
-                <View
-                  style={[
-                    L.stateDot,
-                    {
-                      backgroundColor: rest
-                        ? C.rest
-                        : active.mode === 'focus'
-                          ? C.green
-                          : C.muted,
-                    },
-                  ]}
-                />
-                <Text style={{ color: '#d0e7d9', fontSize: 13 }}>
-                  {names[active.mode]}
-                </Text>
-              </View>
-              <Icon
-                name={rest ? 'rest' : 'focus'}
-                color={rest ? C.rest : '#9cd8b7'}
-                size={23}
-              />
-            </View>
-            <View style={L.timerCenter}>
-              <Text adjustsFontSizeToFit numberOfLines={1} style={L.timer}>
-                {active.mode === 'unknown' ? '—:—' : timer(now - active.at)}
+    <>
+      <FlatList
+        style={{ flex: 1 }}
+        contentContainerStyle={S.content}
+        data={all.slice(0, count)}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item, index }) => (
+          <HistoryRow
+            item={item}
+            now={now}
+            previous={all[index - 1]}
+            onEdit={(item, remove) => setEditing({ item, remove })}
+          />
+        )}
+        onEndReached={() => {
+          if (count < all.length) setCount((c) => c + 20);
+        }}
+        onEndReachedThreshold={0.25}
+        ListHeaderComponent={
+          <>
+            <View
+              style={{
+                marginBottom: 22,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <BrandLogo />
+              <Text
+                style={{
+                  color: C.text,
+                  fontSize: 24,
+                  fontWeight: '600',
+                  letterSpacing: -0.5,
+                }}
+              >
+                Ego Focus
               </Text>
             </View>
-            <Text style={L.timerMeta}>Начато: {clockTime(active.at)}</Text>
+            <View style={L.timerCard}>
+              <TimerBackdrop mode={active.mode} />
+              <View style={S.row}>
+                <View style={L.modeBadge}>
+                  <View
+                    style={[
+                      L.stateDot,
+                      {
+                        backgroundColor: rest
+                          ? C.rest
+                          : active.mode === 'focus'
+                            ? C.green
+                            : C.muted,
+                      },
+                    ]}
+                  />
+                  <Text style={{ color: '#d0e7d9', fontSize: 13 }}>
+                    {names[active.mode]}
+                  </Text>
+                </View>
+                <Icon
+                  name={rest ? 'rest' : 'focus'}
+                  color={rest ? C.rest : '#9cd8b7'}
+                  size={23}
+                />
+              </View>
+              <View style={L.timerCenter}>
+                <Text adjustsFontSizeToFit numberOfLines={1} style={L.timer}>
+                  {active.mode === 'unknown' ? '—:—' : timer(now - active.at)}
+                </Text>
+              </View>
+              <Text style={L.timerMeta}>
+                {new Date(active.at).toLocaleDateString('ru-RU', {
+                  day: 'numeric',
+                  month: 'long',
+                })}{' '}
+                · {clockTime(active.at)}
+              </Text>
+            </View>
+            <View style={{ marginTop: 14 }}>
+              <Button
+                title={
+                  busy
+                    ? 'Сохраняем…'
+                    : next === 'focus'
+                      ? 'Начать фокус'
+                      : 'Перейти к отдыху'
+                }
+                icon={next === 'focus' ? 'focus' : 'rest'}
+                disabled={busy}
+                onPress={() =>
+                  void run(() => repository.switch(account.id, next))
+                }
+              />
+            </View>
+            <View style={L.rule} />
+          </>
+        }
+        ListEmptyComponent={
+          <View
+            style={[
+              S.card,
+              {
+                marginTop: 18,
+                alignItems: 'center',
+                gap: 12,
+                paddingVertical: 32,
+              },
+            ]}
+          >
+            <Icon name="focus" color={C.muted} size={28} />
+            <Text style={{ color: C.text, fontSize: 16 }}>
+              Всё начинается с момента
+            </Text>
+            <Text style={[S.subtitle, { textAlign: 'center' }]}>
+              Здесь появятся завершённые состояния.\nДо первого фокуса — «Нет
+              данных».
+            </Text>
           </View>
-          <View style={{ marginTop: 14 }}>
-            <Button
-              title={
-                busy
-                  ? 'Сохраняем…'
-                  : next === 'focus'
-                    ? 'Начать фокус'
-                    : 'Перейти к отдыху'
-              }
-              icon={next === 'focus' ? 'focus' : 'rest'}
-              disabled={busy}
-              onPress={() =>
-                void run(() => repository.switch(account.id, next))
-              }
-            />
-          </View>
-          <View style={L.rule} />
-        </>
-      }
-      ListEmptyComponent={
-        <View
-          style={[
-            S.card,
-            {
-              marginTop: 18,
-              alignItems: 'center',
-              gap: 12,
-              paddingVertical: 32,
-            },
-          ]}
-        >
-          <Icon name="focus" color={C.muted} size={28} />
-          <Text style={{ color: C.text, fontSize: 16 }}>
-            Всё начинается с момента
-          </Text>
-          <Text style={[S.subtitle, { textAlign: 'center' }]}>
-            Здесь появятся завершённые состояния.\nДо первого фокуса — «Нет
-            данных».
-          </Text>
-        </View>
-      }
-      ListFooterComponent={
-        all.length ? (
-          <Text style={L.footer}>
-            {count < all.length
-              ? 'Прокрутите, чтобы увидеть ещё'
-              : 'Каждому моменту — своё состояние'}
-          </Text>
-        ) : undefined
-      }
-    />
+        }
+        ListFooterComponent={
+          all.length ? (
+            <Text style={L.footer}>
+              {count < all.length
+                ? 'Прокрутите, чтобы увидеть ещё'
+                : 'Каждому моменту — своё состояние'}
+            </Text>
+          ) : undefined
+        }
+      />
+      {editing && (
+        <TimelineEditor
+          account={account}
+          item={editing.item}
+          remove={editing.remove}
+          onClose={() => setEditing(null)}
+          onSave={(db) => {
+            void run(async () => db);
+          }}
+        />
+      )}
+    </>
   );
 }
 

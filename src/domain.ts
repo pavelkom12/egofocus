@@ -50,8 +50,7 @@ export function validateTimeline(account: Account) {
   if (
     !Number.isFinite(account.bornAt) ||
     !events.length ||
-    events[0].at !== account.bornAt ||
-    events[0].mode !== 'unknown'
+    events[0].at !== account.bornAt
   )
     throw new Error('История должна начинаться с даты рождения.');
   const ids = new Set<string>();
@@ -162,4 +161,98 @@ export function dayLabel(time: number, now: number) {
     month: 'long',
     year: 'numeric',
   });
+}
+
+/** Replace a closed range while preserving all time outside it. */
+export function paintRange(
+  events: Transition[],
+  bornAt: number,
+  limit: number,
+  from: number,
+  to: number,
+  mode: Mode,
+  id: () => string,
+): Transition[] {
+  if (
+    !Number.isFinite(from) ||
+    !Number.isFinite(to) ||
+    from < bornAt ||
+    to > limit ||
+    from >= to ||
+    !['focus', 'rest', 'unknown'].includes(mode)
+  )
+    throw new Error(
+      'Проверьте границы интервала: от даты рождения до момента открытия редактора.',
+    );
+  const after = events.filter((e) => e.at <= to).at(-1);
+  if (!after) throw new Error('Некорректная история.');
+  const candidates = [
+    ...events.filter((e) => e.at < from),
+    { id: id(), at: from, mode },
+    { id: id(), at: to, mode: after.mode },
+    ...events.filter((e) => e.at > to),
+  ];
+  return candidates.filter(
+    (e, i) => i === 0 || e.mode !== candidates[i - 1].mode,
+  );
+}
+export function changedRanges(
+  before: Transition[],
+  after: Transition[],
+  limit: number,
+): Interval[] {
+  const points = [
+    ...new Set(
+      [...before, ...after]
+        .map((e) => e.at)
+        .filter((at) => at < limit)
+        .concat(limit),
+    ),
+  ].sort((a, b) => a - b);
+  let a = 0,
+    b = 0;
+  const result: Interval[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const at = points[i],
+      end = points[i + 1];
+    while (a + 1 < before.length && before[a + 1].at <= at) a++;
+    while (b + 1 < after.length && after[b + 1].at <= at) b++;
+    if (before[a].mode !== after[b].mode) {
+      const last = result.at(-1);
+      if (last && last.end === at && last.mode === before[a].mode)
+        last.end = end;
+      else result.push({ id: 'before-' + at, at, end, mode: before[a].mode });
+    }
+  }
+  return result;
+}
+export function commitHistory(
+  account: Account,
+  revision: number,
+  events: Transition[],
+  limit: number,
+  now: number,
+): Account {
+  if (account.revision !== revision)
+    throw new Error(
+      'История изменилась в другом окне. Закройте редактор и откройте снова, чтобы не потерять новые записи.',
+    );
+  if (limit > now || events.some((e) => e.at > limit))
+    throw new Error('Нельзя изменить будущее время.');
+  const originalMode = account.transitions
+    .filter((e) => e.at <= limit)
+    .at(-1)?.mode;
+  const updatedMode = events.filter((e) => e.at <= limit).at(-1)?.mode;
+  if (originalMode !== updatedMode)
+    throw new Error(
+      'Редактор не должен менять состояние после момента открытия.',
+    );
+  const next = {
+    ...account,
+    transitions: events,
+    revision: account.revision + 1,
+    updatedAt: now,
+  };
+  validateTimeline(next);
+  return next;
 }

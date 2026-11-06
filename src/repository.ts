@@ -7,6 +7,8 @@ import {
   type Database,
   type Metric,
   type Mode,
+  type Transition,
+  commitHistory,
   parseBirthday,
   switchMode,
   validateTimeline,
@@ -65,6 +67,25 @@ function replace(db: Database, account: Account): Database {
   };
 }
 export const repository = {
+  saveHistory(
+    id: string,
+    revision: number,
+    events: Transition[],
+    limit: number,
+  ) {
+    return storage.mutate((db) =>
+      replace(
+        db,
+        commitHistory(
+          requireAccount(db, id),
+          revision,
+          events,
+          limit,
+          Date.now(),
+        ),
+      ),
+    );
+  },
   async createDemo() {
     const secret = await credential('demo12345');
     return storage.mutate((db) => {
