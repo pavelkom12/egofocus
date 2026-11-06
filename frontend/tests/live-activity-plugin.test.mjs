@@ -43,6 +43,32 @@ test('Live Activity plugin embeds extension and is idempotent on Expo template',
       });
     await apply();
     assert.equal(project.getFirstTarget().firstTarget.dependencies.length, 1);
+    const extensionTarget = Object.values(
+      project.pbxNativeTargetSection(),
+    ).find(
+      (target) =>
+        typeof target === 'object' &&
+        target.name?.replaceAll('"', '') === 'EgoLiveActivity',
+    );
+    const configurations =
+      project.pbxXCConfigurationList()[extensionTarget.buildConfigurationList]
+        .buildConfigurations;
+    const podspec = fs.readFileSync(
+      path.join(root, 'modules/ego-live-activity/ios/EgoLiveActivity.podspec'),
+      'utf8',
+    );
+    const podName = podspec.match(/s.name\s*=\s*'([^']+)'/)[1];
+    for (const configuration of configurations) {
+      const settings =
+        project.pbxXCBuildConfigurationSection()[configuration.value]
+          .buildSettings;
+      assert.ok(settings.PRODUCT_MODULE_NAME);
+      assert.notEqual(
+        settings.PRODUCT_MODULE_NAME,
+        podName,
+        'Extension must not shadow the Expo native module',
+      );
+    }
     const once = project.writeSync();
     await apply();
     assert.equal(project.writeSync(), once);

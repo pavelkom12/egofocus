@@ -116,6 +116,7 @@ struct EgoAppIntents: AppIntentsPackage {
         project.pbxXCBuildConfigurationSection()[item.value].buildSettings,
         {
           SWIFT_VERSION: '5.0',
+          PRODUCT_MODULE_NAME: 'EgoFocusWidget',
           IPHONEOS_DEPLOYMENT_TARGET: '17.0',
           TARGETED_DEVICE_FAMILY: '1',
           APPLICATION_EXTENSION_API_ONLY: 'YES',
